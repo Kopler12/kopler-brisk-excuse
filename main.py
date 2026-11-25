@@ -15,16 +15,64 @@ LINE = (
 )
 
 
+MAX_CHARS = 200
+
+
+def _sentence_end_count(text: str) -> int:
+    """Count sentence-ending marks (. ! ?) outside quoted passages.
+
+    A quote character only opens a quoted passage at a word boundary
+    (start of text or right after whitespace), so an apostrophe inside
+    a word - the one in "I'm", say - is never mistaken for a quote
+    mark, and punctuation inside a real quotation is not counted as
+    ending the entry's sentence.
+    """
+    count = 0
+    quote = None
+    prev = ""
+    for ch in text:
+        if quote is not None:
+            if ch == quote:
+                quote = None
+        elif ch in "\"'" and (prev == "" or prev.isspace()):
+            quote = ch
+        elif ch in ".!?":
+            count += 1
+        prev = ch
+    return count
+
+
+def _problems(line: str) -> list:
+    """Every way `line` breaks the gate's rules, as human-readable text."""
+    problems = []
+    if not line.strip():
+        problems.append("entry is blank")
+    if "\n" in line or "\r" in line:
+        problems.append("entry must be a single line (no newline characters)")
+    if len(line) > MAX_CHARS:
+        problems.append(
+            "entry is %d characters; the limit is %d" % (len(line), MAX_CHARS)
+        )
+    ends = _sentence_end_count(line)
+    if ends != 1:
+        problems.append(
+            "entry must be exactly one sentence (found %d sentence-ending "
+            "marks outside quotes)" % ends
+        )
+    return problems
+
+
 def validate(line: str) -> bool:
-    """The gate's rule: UTF-8 text of 1 to 200 characters, not blank."""
-    return 1 <= len(line) <= 200 and bool(line.strip())
+    """The gate's rule: one non-blank line, one sentence, <= 200 chars."""
+    return not _problems(line)
 
 
 def main() -> None:
-    # The gate refuses anything outside 1-200 characters, so check the
-    # line before writing it out.
-    if not validate(LINE):
-        raise SystemExit("entry line must be 1-200 non-blank characters")
+    # The gate refuses anything outside its rules, so check the line
+    # before writing it out and name every problem if it fails.
+    problems = _problems(LINE)
+    if problems:
+        raise SystemExit("invalid entry: " + "; ".join(problems))
     out_dir = os.environ.get("OUTPUT_DIR", "/output")
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "entry.txt")
